@@ -174,6 +174,12 @@ export default async function main() {
       client_secret: process.env.ZOHOCRM_CLIENT_SECRET,
     });
   }
+  if (process.env.PIPEDRIVE_CLIENT_ID && process.env.PIPEDRIVE_CLIENT_SECRET) {
+    await createApp("pipedrive-crm", "pipedrive-crm", ["crm"], "pipedrive_crm_other_calendar", {
+      client_id: process.env.PIPEDRIVE_CLIENT_ID,
+      client_secret: process.env.PIPEDRIVE_CLIENT_SECRET,
+    });
+  }
 
   await createApp("wipe-my-cal", "wipemycalother", ["automation"], "wipemycal_other");
   if (process.env.GIPHY_API_KEY) {
