@@ -5,7 +5,10 @@ import { CrmServiceMap } from "../crm.apps.generated";
 
 const log = logger.getSubLogger({ prefix: ["CrmManager"] });
 export const getCrm = async (credential: CredentialPayload, appOptions: any) => {
-  if (!credential || !credential.key) return null;
+  if (!credential || !credential.key) {
+    log.warn(`Invalid credential: credential or credential.key is missing for credential ID ${credential?.id}`);
+    return null;
+  }
   const { type: crmType } = credential;
 
   const crmName = crmType.split("_")[0];
@@ -24,7 +27,15 @@ export const getCrm = async (credential: CredentialPayload, appOptions: any) => 
     return null;
   }
 
-  return new CrmService(credential, appOptions);
+  try {
+    return new CrmService(credential, appOptions);
+  } catch (error) {
+    log.error(
+      `Failed to initialize CRM service for ${crmType} (credential ID: ${credential.id})`,
+      error instanceof Error ? error.message : String(error)
+    );
+    return null;
+  }
 };
 
 export default getCrm;

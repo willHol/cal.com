@@ -8,11 +8,12 @@ export function getTokenObjectFromCredential(credential: Pick<CredentialPayload,
   const parsedTokenResponse = OAuth2TokenResponseInDbSchema.safeParse(credential.key);
   if (!parsedTokenResponse.success) {
     logger.error(
-      "GoogleCalendarService-getTokenObjectFromCredential",
+      "getTokenObjectFromCredential",
+      `Failed to parse credential.key for credential ID ${credential.id}:`,
       safeStringify(parsedTokenResponse.error.issues)
     );
     throw new Error(
-      `Could not parse credential.key ${credential.id} with error: ${parsedTokenResponse?.error}`
+      `Could not parse credential.key ${credential.id} with error: ${safeStringify(parsedTokenResponse.error.issues)}`
     );
   }
 

@@ -240,6 +240,7 @@ export default class PipedriveCrmService implements CRM {
     const endDate = new Date(event.endTime);
     const duration = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
 
+    const locationString = getLocation(event);
     const activityPayload = {
       subject: event.title,
       type: "meeting",
@@ -247,8 +248,8 @@ export default class PipedriveCrmService implements CRM {
       due_time: startDate.toTimeString().split(" ")[0].substring(0, 5),
       duration: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}`,
       note: this.getMeetingBody(event),
-      location: getLocation(event),
-      person_id: parseInt(contacts[0].id),
+      ...(locationString && { location: { value: locationString } }),
+      participants: [{ person_id: parseInt(contacts[0].id), primary_flag: true }],
     };
 
     const { json } = await this.auth.request({
@@ -270,13 +271,14 @@ export default class PipedriveCrmService implements CRM {
     const endDate = new Date(event.endTime);
     const duration = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
 
+    const locationString = getLocation(event);
     const activityPayload = {
       subject: event.title,
       due_date: startDate.toISOString().split("T")[0],
       due_time: startDate.toTimeString().split(" ")[0].substring(0, 5),
       duration: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}`,
       note: this.getMeetingBody(event),
-      location: getLocation(event),
+      ...(locationString && { location: { value: locationString } }),
     };
 
     const { json } = await this.auth.request({
