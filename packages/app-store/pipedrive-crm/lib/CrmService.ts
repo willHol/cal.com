@@ -21,7 +21,7 @@ type PipedriveContact = {
   name: string;
   first_name: string;
   last_name: string;
-  email: Array<{ value: string; primary: boolean }>;
+  emails: Array<{ value: string; primary: boolean }>;
 };
 
 type PipedriveActivity = {
@@ -35,6 +35,24 @@ type PipedriveActivity = {
   person_id: number;
 };
 
+type PipedriveApiResponse<T> = {
+  success: boolean;
+  data?: T;
+};
+
+type PipedriveSearchResponse = {
+  success: boolean;
+  data?: {
+    items: Array<{
+      item: PipedriveContact;
+    }>;
+  };
+};
+
+type PipedriveCredentialKey = {
+  api_domain: string;
+};
+
 export default class PipedriveCrmService implements CRM {
   private log: typeof logger;
   private auth: OAuthManager;
@@ -45,7 +63,7 @@ export default class PipedriveCrmService implements CRM {
     this.log = logger.getSubLogger({ prefix: [`[[lib] ${appConfig.slug}`] });
     this.credential = credential;
 
-    const key = credential.key as any;
+    const key = credential.key as PipedriveCredentialKey;
     this.apiDomain = key.api_domain;
 
     const tokenResponse = getTokenObjectFromCredential(credential);
@@ -139,24 +157,24 @@ export default class PipedriveCrmService implements CRM {
         name: attendee.name || attendee.email,
         first_name: firstName,
         last_name: lastName || "",
-        email: [{ value: attendee.email, primary: true }],
+        emails: [{ value: attendee.email, primary: true }],
       };
 
       try {
         const { json } = await this.auth.request({
-          url: `${this.apiDomain}/api/v1/persons`,
+          url: `${this.apiDomain}/api/v2/persons`,
           options: {
             method: "POST",
             body: JSON.stringify(bodyData),
           },
         });
 
-        const result = json as any;
+        const result = json as PipedriveApiResponse<PipedriveContact>;
         if (result.success && result.data) {
-          const contact = result.data as PipedriveContact;
+          const contact = result.data;
           return {
             id: contact.id.toString(),
-            email: contact.email[0]?.value || attendee.email,
+            email: contact.emails[0]?.value || attendee.email,
             firstName: contact.first_name,
             lastName: contact.last_name,
             name: contact.name,
@@ -178,19 +196,19 @@ export default class PipedriveCrmService implements CRM {
     const result = emailArray.map(async (email) => {
       try {
         const { json } = await this.auth.request({
-          url: `${this.apiDomain}/api/v1/persons/search?term=${encodeURIComponent(email)}&fields=email`,
+          url: `${this.apiDomain}/api/v2/persons/search?term=${encodeURIComponent(email)}&fields=email`,
           options: {
             method: "GET",
           },
         });
 
-        const result = json as any;
+        const result = json as PipedriveSearchResponse;
         if (result.success && result.data?.items) {
-          return result.data.items.map((item: any) => {
-            const contact = item.item as PipedriveContact;
+          return result.data.items.map((item) => {
+            const contact = item.item;
             return {
               id: contact.id.toString(),
-              email: contact.email[0]?.value || email,
+              email: contact.emails[0]?.value || email,
               firstName: contact.first_name,
               lastName: contact.last_name,
               name: contact.name,
@@ -214,7 +232,10 @@ export default class PipedriveCrmService implements CRM {
     }\n\n${event.organizer.language.translate("share_additional_notes")}\n${event.additionalNotes || "-"}`;
   };
 
-  private createPipedriveActivity = async (event: CalendarEvent, contacts: Contact[]) => {
+  private createPipedriveActivity = async (
+    event: CalendarEvent,
+    contacts: Contact[]
+  ): Promise<PipedriveApiResponse<PipedriveActivity>> => {
     const startDate = new Date(event.startTime);
     const endDate = new Date(event.endTime);
     const duration = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
@@ -231,17 +252,20 @@ export default class PipedriveCrmService implements CRM {
     };
 
     const { json } = await this.auth.request({
-      url: `${this.apiDomain}/api/v1/activities`,
+      url: `${this.apiDomain}/api/v2/activities`,
       options: {
         method: "POST",
         body: JSON.stringify(activityPayload),
       },
     });
 
-    return json;
+    return json as PipedriveApiResponse<PipedriveActivity>;
   };
 
-  private updateActivity = async (uid: string, event: CalendarEvent) => {
+  private updateActivity = async (
+    uid: string,
+    event: CalendarEvent
+  ): Promise<PipedriveApiResponse<PipedriveActivity>> => {
     const startDate = new Date(event.startTime);
     const endDate = new Date(event.endTime);
     const duration = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
@@ -256,19 +280,19 @@ export default class PipedriveCrmService implements CRM {
     };
 
     const { json } = await this.auth.request({
-      url: `${this.apiDomain}/api/v1/activities/${uid}`,
+      url: `${this.apiDomain}/api/v2/activities/${uid}`,
       options: {
-        method: "PUT",
+        method: "PATCH",
         body: JSON.stringify(activityPayload),
       },
     });
 
-    return json;
+    return json as PipedriveApiResponse<PipedriveActivity>;
   };
 
   private deleteActivity = async (uid: string) => {
     const { json } = await this.auth.request({
-      url: `${this.apiDomain}/api/v1/activities/${uid}`,
+      url: `${this.apiDomain}/api/v2/activities/${uid}`,
       options: {
         method: "DELETE",
       },
@@ -280,11 +304,11 @@ export default class PipedriveCrmService implements CRM {
   async handleEventCreation(event: CalendarEvent, contacts: Contact[]) {
     const meetingEvent = await this.createPipedriveActivity(event, contacts);
 
-    if ((meetingEvent as any).success && (meetingEvent as any).data) {
+    if (meetingEvent.success && meetingEvent.data) {
       this.log.debug("event:creation:ok", { meetingEvent });
       return Promise.resolve({
-        uid: (meetingEvent as any).data.id.toString(),
-        id: (meetingEvent as any).data.id.toString(),
+        uid: meetingEvent.data.id.toString(),
+        id: meetingEvent.data.id.toString(),
         type: appConfig.slug,
         password: "",
         url: "",
@@ -303,11 +327,11 @@ export default class PipedriveCrmService implements CRM {
   async updateEvent(uid: string, event: CalendarEvent): Promise<NewCalendarEventType> {
     const meetingEvent = await this.updateActivity(uid, event);
 
-    if ((meetingEvent as any).success && (meetingEvent as any).data) {
+    if (meetingEvent.success && meetingEvent.data) {
       this.log.debug("event:updation:ok", { meetingEvent });
       return Promise.resolve({
-        uid: (meetingEvent as any).data.id.toString(),
-        id: (meetingEvent as any).data.id.toString(),
+        uid: meetingEvent.data.id.toString(),
+        id: meetingEvent.data.id.toString(),
         type: appConfig.slug,
         password: "",
         url: "",
