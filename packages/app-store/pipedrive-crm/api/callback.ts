@@ -56,9 +56,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }),
   });
 
+  if (!tokenResponse.ok) {
+    const errorBody = await tokenResponse.text();
+    console.error("Pipedrive OAuth token request failed:", {
+      status: tokenResponse.status,
+      statusText: tokenResponse.statusText,
+      body: errorBody,
+    });
+
+    return res.status(400).json({
+      message: "Failed to exchange code for access token. Please try reconnecting the integration.",
+      error: errorBody,
+    });
+  }
+
   const pipedriveToken: PipedriveToken = await tokenResponse.json();
 
-  pipedriveToken.expiryDate = Math.round(Date.now() + pipedriveToken.expires_in * 1000);
+  if (!pipedriveToken.access_token || !pipedriveToken.refresh_token) {
+    console.error("Pipedrive token response missing required fields:", pipedriveToken);
+    return res.status(400).json({
+      message: "Received invalid token response from Pipedrive. Please try again.",
+    });
+  }
+
+  pipedriveToken.expiryDate = Math.round(Date.now() + (pipedriveToken.expires_in || 3600) * 1000);
 
   await createOAuthAppCredential({ appId: appConfig.slug, type: appConfig.type }, pipedriveToken, req);
 
